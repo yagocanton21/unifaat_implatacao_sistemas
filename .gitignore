@@ -37,7 +37,6 @@ override.tf.json
 terraform.rc
 .claude/
 NaoEnvaiadas/
-Aula010/
 Aula011/
 Aula012/
 Aula013/
@@ -45,3 +44,4 @@ Aula014/
 Aula015/
 Aula016/
 Aula016.1/
+.claude/
