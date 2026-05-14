@@ -127,10 +127,7 @@ Tempo proporcional ao tamanho do storage alocado, não ao tamanho do banco.
 
 ## 12. Coleção de logs
 
-Os scripts geram logs em `migration/dumps/migrate_<timestamp>.log`. Anexar ao PR caso haja dúvida na revisão.
-
-```
-migration/dumps/
-├── northwind_20260513_193012.dump
-└── migrate_20260513_193012.log
-```
+O `migrate-data.sh` gera logs nomeados em `migration/dumps/migrate_<timestamp>.log`
+(diretório criado em tempo de execução; não versionado para evitar publicar
+dumps binários no repositório). Os logs ficam disponíveis localmente após a
+execução; o conteúdo relevante foi inlinado nos anexos de `performance-analysis.md`.

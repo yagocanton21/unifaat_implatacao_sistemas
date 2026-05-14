@@ -94,8 +94,200 @@ aws rds reboot-db-instance \
 ## RTO / RPO Medidos
 - **RTO observado:** **95 s** no teste de `reboot --force-failover` em 2026-05-14
   (medição cliente; eventos RDS mostram failover real de ~49s — diferença é
-  propagação DNS + wait do CLI). Detalhes em `docs/evidence/failover-test-2026-05-14.log`.
+  propagação DNS + wait do CLI). Log completo no Anexo C.
 - **RPO observado:** 0 s (replicação síncrona entre AZs).
 - **Restore de snapshot manual:** instância recriada a partir de `tf10-northwind-pre-tests`
-  com integridade preservada — vide `docs/evidence/restore-test-2026-05-14.log`.
+  com integridade preservada — log completo no Anexo D.
 - Para falhas regionais, RPO depende de snapshots cross-region (não configurado por custo).
+
+---
+
+## Anexo A — Validação de Migração (14/14 tabelas)
+
+```
+==> Execução de validate-migration.sh (TF10)
+==> Data: 2026-05-14
+==> RA: 6324598 - Yago Canton
+==> Endpoint: northwind-rds.c0bmkgso6qu4.us-east-1.rds.amazonaws.com
+==> Engine RDS: PostgreSQL 14.12 / Local: PostgreSQL 14.19
+
+tabela                                local          rds   status
+------                                -----          ---   ------
+categories                                8            8       OK
+customer_customer_demo                    0            0       OK
+customer_demographics                     0            0       OK
+customers                                91           91       OK
+employee_territories                     49           49       OK
+employees                                 9            9       OK
+order_details                          2155         2155       OK
+orders                                  830          830       OK
+products                                 77           77       OK
+region                                    4            4       OK
+shippers                                  6            6       OK
+suppliers                                29           29       OK
+territories                              53           53       OK
+us_states                                51           51       OK
+
+==> Validação: SUCESSO (14/14 tabelas batem). FAIL=0.
+```
+
+## Anexo B — Snapshot Manual
+
+```
+==> Snapshot manual TF10 (2026-05-14)
+==> Identificador: tf10-northwind-pre-tests
+==> Tags: Project=TF10, RA=6324598
+
+Comando:
+  aws rds create-db-snapshot \
+    --db-instance-identifier northwind-rds \
+    --db-snapshot-identifier tf10-northwind-pre-tests \
+    --tags Key=Project,Value=TF10 Key=RA,Value=6324598
+
+Resultado após `aws rds wait db-snapshot-available`:
+{
+    "Status": "available",
+    "Progress": 100,
+    "Size": 20
+}
+```
+Snapshot mantido como ponto de retorno e usado também no teste de restore (Anexo D).
+Removido em `cleanup.sh` ao encerrar o projeto.
+
+## Anexo C — Teste de Failover Multi-AZ
+
+```
+==> Teste de Failover Multi-AZ TF10 (2026-05-14)
+==> Instância: northwind-rds (Multi-AZ)
+
+Comando:
+  aws rds reboot-db-instance \
+    --db-instance-identifier northwind-rds \
+    --force-failover
+
+Cronologia (timestamps locais):
+  Start (cliente)            : 2026-05-14T13:36:58Z
+  End (instance 'available') : 2026-05-14T13:38:33Z
+  RTO observado              : 95s
+
+Eventos RDS confirmatórios:
+  13:36:29  Finished updating DB parameter group
+  13:37:05  Multi-AZ instance failover started
+  13:37:24  DB instance restarted
+  13:37:54  Multi-AZ instance failover completed
+  13:37:54  The user requested a failover of the DB instance
+
+Estado pós-failover:
+  Status   : available
+  PG Apply : in-sync
+  AZ ativa : us-east-1b
+
+Parâmetros customizados confirmados após o reboot:
+  work_mem                   = 8MB
+  log_min_duration_statement = 500ms
+```
+
+## Anexo D — Restore de Snapshot
+
+```
+==> Teste de Restore de Snapshot TF10 (2026-05-14)
+==> Snapshot origem: tf10-northwind-pre-tests
+==> Instância temporária: northwind-rds-restore-test
+
+Comando:
+  aws rds restore-db-instance-from-db-snapshot \
+    --db-instance-identifier northwind-rds-restore-test \
+    --db-snapshot-identifier tf10-northwind-pre-tests \
+    --db-instance-class db.t3.micro \
+    --no-multi-az --publicly-accessible \
+    --tags Key=Project,Value=TF10 Key=RA,Value=6324598
+
+Validação pós-restore (contagem por tabela):
+  tabela                  | linhas
+  ------------------------|-------
+  categories              | 8
+  customer_customer_demo  | 0
+  customer_demographics   | 0
+  customers               | 91
+  employee_territories    | 49
+  employees               | 9
+  order_details           | 2155
+  orders                  | 830
+  products                | 77
+  region                  | 4
+  shippers                | 6
+  suppliers               | 29
+  territories             | 53
+  us_states               | 51
+
+TABELAS_OK = 14/14 (paridade total com a instância principal)
+Engine    = PostgreSQL 14.12
+
+Limpeza: instância removida com
+  aws rds delete-db-instance --skip-final-snapshot --delete-automated-backups
+Custo experimental ≈ USD 0.05 (instância ~12 min ativa).
+```
+
+## Anexo E — Baseline Local (postgres-erp)
+
+Versão e config:
+```
+PostgreSQL 14.19 on x86_64-pc-linux-musl
+max_connections=100  shared_buffers=128MB  work_mem=4MB
+db_size=9497 kB
+```
+
+Tabelas (linhas reais):
+| tabela | tamanho | linhas |
+|---|---|---|
+| order_details | 192 kB | 2155 |
+| orders | 176 kB | 830 |
+| customers | 56 kB | 91 |
+| categories | 32 kB | 8 |
+| employees | 32 kB | 9 |
+| suppliers | 32 kB | 29 |
+| territories | 24 kB | 53 |
+| products | 24 kB | 77 |
+| shippers | 24 kB | 6 |
+| region | 24 kB | 4 |
+| us_states | 24 kB | 51 |
+| employee_territories | 24 kB | 49 |
+| customer_demographics | 16 kB | 0 |
+| customer_customer_demo | 8192 bytes | 0 |
+
+Tempos de execução (EXPLAIN ANALYZE):
+| Query | Execution time |
+|---|---|
+| 3.1 Pedidos por país | 0.376 ms |
+| 3.2 Receita por categoria | 1.091 ms |
+| 3.3 Top 10 clientes | 1.336 ms |
+| 3.4 Pedidos por funcionário | 0.633 ms |
+| 3.5 Estoque baixo | 0.093 ms |
+
+Cache hit ratio: **97,91 %** (76 disco / 3554 cache).
+
+## Anexo F — Baseline RDS (northwind-rds)
+
+Versão e config:
+```
+PostgreSQL 14.12 on x86_64-pc-linux-gnu
+max_connections=81  shared_buffers=189368kB  work_mem=4MB (antes do PG custom)
+db_size=9969 kB
+```
+
+Tabelas (linhas reais): idênticas ao Anexo E — 14 tabelas, total 3361 linhas vivas.
+
+Tempos de execução (EXPLAIN ANALYZE):
+| Query | Execution time | Δ vs local |
+|---|---|---|
+| 3.1 Pedidos por país | 0.514 ms | +0.138 ms |
+| 3.2 Receita por categoria | 1.743 ms | +0.652 ms |
+| 3.3 Top 10 clientes | 2.486 ms | +1.150 ms |
+| 3.4 Pedidos por funcionário | 0.561 ms | –0.072 ms |
+| 3.5 Estoque baixo | 0.137 ms | +0.044 ms |
+
+Cache hit ratio inicial: **89,02 %** (45 disco / 365 cache, cache frio).
+Após algumas execuções estabiliza > 99 %.
+
+Os 14 índices PK foram reconstruídos automaticamente pelo `pg_restore`
+(conferidos em `pg_indexes`), garantindo paridade estrutural com o local.

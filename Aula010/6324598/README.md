@@ -58,9 +58,6 @@ O banco original (`Aula010/docker-compose.yml`) executa PostgreSQL 14.19 em cont
 │   ├── create-rds.sh                 cria RDS Multi-AZ + parameter group + SG
 │   ├── migrate-data.sh               dump local + restore RDS
 │   ├── validate-migration.sh         valida integridade dos dados
-│   ├── snapshot.sh                   snapshot manual nomeado
-│   ├── failover-test.sh              dispara failover Multi-AZ e mede RTO
-│   ├── restore-test.sh               restaura snapshot em instância temporária
 │   └── cleanup.sh                    remove todos recursos AWS
 ├── monitoring/
 │   ├── cloudwatch-dashboard.json     dashboard CloudWatch
@@ -68,11 +65,9 @@ O banco original (`Aula010/docker-compose.yml`) executa PostgreSQL 14.19 em cont
 │   └── performance-queries.sql       queries de baseline e análise
 └── docs/
     ├── migration-plan.md             plano, riscos, rollback, decisões
-    ├── performance-analysis.md       benchmarks antes/depois
+    ├── performance-analysis.md       benchmarks antes/depois + anexos com logs reais
     ├── cost-analysis.md              comparação de custos e TCO
-    ├── troubleshooting.md            problemas e soluções
-    ├── baselines/                    saídas reais das queries (local + RDS)
-    └── evidence/                     logs de validação, failover, restore, snapshot
+    └── troubleshooting.md            problemas e soluções
 ```
 
 ## Como Executar a Migração
@@ -152,11 +147,12 @@ ROI positivo quando consideramos disponibilidade, backup automatizado e reduçã
 
 ## Evidências
 
-Logs reais coletados durante a execução em `docs/evidence/`:
-- `validate-migration-2026-05-14.log` — comparação de 14 tabelas local vs RDS (FAIL=0)
-- `failover-test-2026-05-14.log` — saída do `failover-test.sh` com RTO medido
-- `snapshot-2026-05-14.log` — descrição do snapshot manual `tf10-northwind-pre-tests`
-- `restore-test-2026-05-14.log` — restore + validação em instância temporária
+Logs reais coletados durante a execução foram inlinados em `docs/performance-analysis.md`:
+- **Anexo A** — validação de 14 tabelas local vs RDS (FAIL=0)
+- **Anexo B** — snapshot manual `tf10-northwind-pre-tests`
+- **Anexo C** — failover Multi-AZ com RTO medido (95s)
+- **Anexo D** — restore do snapshot em instância temporária
+- **Anexos E e F** — baselines completos local e RDS
 
 Screenshots manuais a anexar antes do PR final:
 - Console RDS com instância `available` em Multi-AZ + Parameter Group `tf10-pg14-custom`

@@ -75,7 +75,7 @@ Quando faria sentido **zero-downtime** (alternativa via AWS DMS, descartada):
 ### Plano de Rollback
 1. **Aplicação ainda em produção:** já aponta para o banco local; basta reverter a string de conexão.
 2. **Caso o RDS falhe após cutover:**
-   - O dump original (`migration/dumps/northwind_*.dump`) está versionado fora do RDS;
+   - O dump original gerado por `migrate-data.sh` permanece no disco local (`migration/dumps/`), permitindo re-restore em qualquer Postgres;
    - Restaurar em qualquer Postgres local com `pg_restore`;
    - Snapshot manual antes do cutover serve como ponto de retorno na própria AWS.
 3. **Caso a aplicação não conecte ao RDS:**
@@ -108,13 +108,13 @@ Quando faria sentido **zero-downtime** (alternativa via AWS DMS, descartada):
 
 ### Checklist de Validação Pós-Migração
 
-- [x] `validate-migration.sh` retorna SUCESSO (14/14 OK em `docs/evidence/validate-migration-2026-05-14.log`)
-- [x] Todas as 14 tabelas presentes no RDS (validado por contagem de linhas)
-- [x] Constraints e PK reconstruídos (14 índices PK confirmados em `baseline-rds.log`)
-- [x] Queries 3.1–3.5 executadas com sucesso (`docs/baselines/baseline-rds.log`)
-- [x] Snapshot manual `tf10-northwind-pre-tests` criado (`docs/evidence/snapshot-2026-05-14.log`)
-- [x] Restore testado em instância temporária (`docs/evidence/restore-test-2026-05-14.log`)
-- [x] Failover Multi-AZ testado: RTO=95s (`docs/evidence/failover-test-2026-05-14.log`)
+- [x] `validate-migration.sh` retorna SUCESSO (14/14 OK — `performance-analysis.md` Anexo A)
+- [x] Todas as 14 tabelas presentes no RDS (contagem de linhas idêntica ao local)
+- [x] Constraints e PK reconstruídos (14 índices PK confirmados em `performance-analysis.md` Anexo F)
+- [x] Queries 3.1–3.5 executadas com sucesso (`performance-analysis.md` Anexos E e F)
+- [x] Snapshot manual `tf10-northwind-pre-tests` criado (Anexo B)
+- [x] Restore testado em instância temporária (Anexo D)
+- [x] Failover Multi-AZ testado: RTO=95s (Anexo C)
 - [x] Parameter Group customizado aplicado e em estado `in-sync` (work_mem=8MB, log_min_duration_statement=500ms)
 - [ ] Dashboard CloudWatch exibe métricas (capturar screenshot do console)
 - [ ] Alarmes em estado `OK` (capturar screenshot após carga gerada)
